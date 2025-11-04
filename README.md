@@ -1,81 +1,34 @@
-# Team 7 Data Dictionary
 
-This document provides a complete inventory of all datasets for the **"Cost Foresight - Forecasting Production Costs in Steel"** project.
 
-The data is grouped by its role in our financial model, which compares the **"Old" (BF-BOF)** pathway with the **"New" (H2-DRI)** pathway.
+# README: Cost Foresight - Steel Production Cost Dataset
 
----
+## Overview
 
-## 1. Pathway 1: "Old Steel" (BF-BOF) Costs
+This dataset is made for the "Cost Foresight - Forecasting Production Costs in Steel" project.
 
-These files establish the baseline operating costs of the traditional **Blast Furnace - Basic Oxygen Furnace (BF-BOF)** route.
+The goal is to build a predictive model that forecasts the production costs of a steel manufacturer by integrating its internal accounting data with external, high-frequency market indices.
 
-* **File:** `Coking Coal Futures Historical Data.csv`
-    * **What it is:** The futures price of metallurgical (coking) coal.
-    * **Role:** This is the primary **fuel cost** for the blast furnace.
-    * **Notes:** The `Price` is in **Chinese Yuan (CNY)** and will need to be converted.
+* **Company Profiled:** Nucor Corporation (a US-based steel producer).
+* **Production Method:** Electric Arc Furnace (EAF), which primarily uses scrap steel and electricity and natural gas (in some processes).
 
-* **File:** `Carbon Emissions Futures Historical Data UK.csv`
-    * **What it is:** The price of EU Emissions Trading System (ETS) carbon allowances.
-    * **Role:** This is the **"carbon tax"** or financial penalty for $CO_2$ emissions, a key variable driving the switch to new technology.
-    * **Notes:** The `Price` is in **Euros (EUR)**.
 
----
+## Methodology
 
-## 2. Pathway 2: "New Steel" (H2-DRI) Costs
+Here how we will use the data for the forecast model
 
-This file represents the primary energy cost for the new **Hydrogen - Direct-Reduced Iron (H2-DRI) + Electric Arc Furnace (EAF)** pathway.
+1.  **Target Data (Y):** Nucor's quarterly accounting data was extracted from `nucor.csv`. This file provided the target variable, **`Cost_of_Products_Sold`**, **`Gross Margin`** and **`Inventories`**.
+2.  **Feature Data (X):** Based on Nucor's EAF business model and public disclosures, three primary cost drivers were identified:
+    * **X1 (Scrap Steel):** `WPS101.csv` - US Producer Price Index for Iron and Steel Scrap.
+    * **X2 (Electricity):** `Average_retail_price_of_electricity_United_States_monthly.csv` - US Average Industrial Electricity Price.
+    * **X3 (Natural Gas):** `Henry_Hub_Natural_Gas_Spot_Price.csv` - US Natural Gas Spot Price. (This is a key input for Nucor's in-house DRI and electricity production).
+3.  **Cleaning & Resampling:** The Nucor data was provided **quarterly**, while the three market indices were **monthly**. To align them, the three monthly files were "resampled" to a quarterly frequency by calculating the 3-month average for each period.
+4.  **Merge:** We need to fix this problem
 
-* **File:** `estat_nrg_pc_205$defaultview_filtered.tsv`
-    * **What it is:** Eurostat data for bi-annual industrial electricity prices (non-household consumers).
-    * **Role:** This is the primary **energy cost** for the EAF and for producing green hydrogen via electrolysis.
-    * **Notes:** **REQUIRES CLEANING.** This file is in a "wide" format (dates are columns). It must be pivoted ("melted") into a "long" format (e.g., `date`, `country`, `price`) to be used in our model.
 
----
+## Source Files
 
-## 3. Key Raw Material: Iron Ore (Input for Both)
-
-This is the main raw material for both steelmaking pathways.
-
-* **File:** `Iron ore fines 62_ Fe CFR Futures Historical Data UK_TIOc1.csv`
-    * **What it is:** The main global benchmark price for standard 62% Fe iron ore. This is the front-month (`c1`) futures contract.
-    * **Role:** The primary **raw material cost**.
-
-* **File:** `Iron ore fines 62_ Fe CFR Futures Historical Data UK_TIOc2.csv`
-* **File:** `Iron ore fines 62_ Fe CFR Futures Historical Data UK_TIOc3.csv`
-    * **What they are:** The 2nd and 3rd-month futures contracts.
-    * **Role:** We can use these to create a **"spread"** (e.g., `c2-c1`) to analyze market sentiment (contango vs. backwardation) and as a predictive feature.
-
----
-
-## 4. Producer Price Indices (PPIs) - Historical Baseline
-
-These files (from FRED) are our monthly "ground truth" price indicators. They show what producers *have been* paying historically in the US.
-
-* **File:** `PPIACO.csv`
-    * **What it is:** PPI for **All Commodities**.
-    * **Role:** A broad baseline for overall economic inflation.
-
-* **File:** `WPS101.csv`
-    * **What it is:** PPI for **Iron and Steel**.
-    * **Role:** Our key historical price benchmark for the steel industry.
-
-* **File:** `WPU1012.csv`
-    * **What it is:** PPI for **Nonferrous Metals**.
-    * **Role:** Represents the price of **substitute materials** (like aluminum or copper) that compete with steel.
-
-* **File:** `PCU3312213312211.csv`
-    * **What it is:** PPI for **Rolled Steel Shape Manufacturing**.
-    * **Role:** Price of a specific downstream steel product.
-
-* **File:** `PCU33123312.csv`
-    * **What it is:** PPI for **Iron and Steel Pipe and Tube Manufacturing**.
-    * **Role:** Price of another specific downstream steel product.
-
----
-
-## 5. Macro-Economic Indicator
-
-* **File:** `Baltic Dry Index Historical Results Price Data.csv`
-    * **What it is:** The Baltic Dry Index (BDI).
-    * **Role:** A leading indicator for global industrial demand and raw material shipping costs.
+* `nucor.csv`: Quarterly accounting data for Nucor.
+* `WPS101.csv`: Monthly US PPI for Iron and Steel Scrap (US Bureau of Labor Statistics).
+* `Average_retail_price_of_electricity_United_States_monthly.csv`: Monthly US Industrial Electricity Price (US EIA).
+* `Henry_Hub_Natural_Gas_Spot_Price.csv`: Monthly Henry Hub Natural Gas Spot Price (US EIA).
+* (work in progress maybe we'll use tornado data)
