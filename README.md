@@ -48,13 +48,13 @@ Our model's "foresight" comes from using a set of leading indicators (X) to pred
 
 ## ⚙️ Data Pipeline & Methodology
 
-The primary data engineering task is to time-align our **quarterly** target (Y) with our **monthly** features (X). The `preprocessing.ipynb` notebook handles this entire pipeline:
+The primary data engineering task is to time-align our **quarterly** target (Y) with our **monthly** features (X). Our data processing scripts and notebooks handle this entire pipeline:
 
-1.  **Load:** Loads the four key source files (Nucor accounting + 3 core features).
-2.  **Clean:** Cleans number formatting (e.g., "$", ",") and handles messy headers from government (EIA) files.
+1.  **Load:** Loads the multiple source files (Nucor accounting + external features).
+2.  **Clean:** Cleans number formatting (e.g., "$", ",") and handles messy headers from government (EIA, BLS) files.
 3.  **Resample:** Aggregates the monthly features into quarterly data by calculating the **3-month average** for each quarter.
-4.  **Merge:** Joins the quarterly Nucor data with the newly resampled quarterly features into a single time-series dataset.
-5.  **Output:** Saves the final, model-ready `master_dataset.csv`.
+4.  **Merge:** Joins the quarterly Nucor data with the newly resampled quarterly features into a single, time-aligned dataset.
+5.  **Output:** Saves the final, model-ready dataset for analysis and modeling.
 
 ## 🗂️ Data Sources
 
@@ -84,4 +84,4 @@ The primary data engineering task is to time-align our **quarterly** target (Y) 
     * **PolicyUncertainty.com:**
         * `Economic_Policy_Uncertainty_Index`
 
-## 📂 Repository Structure (in progress)
+## 📂 Repository Structure
