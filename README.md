@@ -2,86 +2,125 @@
 
 [![Project Status](https://img.shields.io/badge/status-in_progress-yellow.svg)](https://github.com/)
 
-## 🎯 Project Goal
 
-This repository contains the work for our Master's project in **Financial Analysis and Performance Measurement**. The objective is to develop a conceptual AI/Data Science solution to forecast future production costs in the steel industry. We are building a predictive model that integrates a company's internal accounting data with a wide range of external, high-frequency market indices.
+## 📖 Overview
 
-## 🏭 The Business Case
+This project demonstrates a **Master's-level Data Science solution** for the financial analysis of the steel industry. We developed an automated data pipeline to forecast **Unit Production Costs** (`Cost_Per_Ton`) for **Nucor Corporation (NUE)**.
 
-* **Company Profiled:** **Nucor Corporation (NYSE: NUE)**, a leading US-based steel producer.
-* **Production Method:** Nucor primarily uses **Electric Arc Furnaces (EAF)**. Our model is therefore built on the key inputs for this process: **scrap steel**, **electricity**, and **natural gas**.
+The model integrates internal financial data (scraped from SEC filings) with 12 external macroeconomic indicators to predict cost fluctuations.
 
-## 📈 The Core Analytic: Engineering a Better Target (Y)
+  * **Company:** Nucor Corporation (Electric Arc Furnace producer).
+  * **Target:** `Cost_Per_Ton` (Derived from COGS / Sales Volume).
+  * **Scope:** 2015 – 2025 (Quarterly).
 
-Our initial analysis revealed that the standard `Cost_of_Products_Sold` is a "noisy" target variable.
+-----
 
-> **The Problem:** `Cost_of_Products_Sold` (COGS) mixes two factors: volatile market prices (input costs) and variable production volume. A model predicting this can't distinguish between a 10% cost increase from higher prices and a 10% increase from making 10% more steel.
+## 🏗️ The Engineering Pipeline
 
-To build an insightful model, our primary task is to engineer a "pure" target variable that isolates true cost pressure and efficiency.
+Unlike simple datasets, this project involved creating a robust ETL pipeline to handle unstructured financial text and time-series alignment.
 
-**Target Variable (Y): `Cost_per_Ton`**
+### 1\. Data Extraction (The "Exhibit Hunter")
 
-We parse Nucor's quarterly SEC 10-Q filings to calculate this new variable:
+  * **Script:** `src/data/1_data_extractor.py`
+  * **Challenge:** Nucor's 10-K filings often hide critical data in attached "Exhibit 13" documents or use inconsistent HTML/XBRL tagging over the last decade.
+  * **Solution:** Built a custom scraper using `BeautifulSoup` that:
+      * Parses both modern XBRL tags (2019-2024) and legacy HTML tables (2015-2018).
+      * Detects missing data in the main 10-K and automatically downloads/scrapes **Exhibit 13** to recover it.
+      * Uses Regex to extract "Tons Shipped" from unstructured text paragraphs.
 
-$$
-\text{Cost per Ton} = \frac{\text{Consolidated Cost of Products Sold}}{\text{Total Tons Shipped to External Customers}}
-$$
+### 2\. Data Processing (The Logic Core)
 
-## 🛠️ Feature Engineering (X Variables)
+  * **Script:** `src/data/2_data_processor.py`
+  * **Challenge:** The SEC only provides "Year-End" totals for Q4, not quarterly values. Also, reporting units changed from Thousands to Millions over time.
+  * **Solution:** \* **Reverse Calculation:** Computed Q4 data mathematically: `Annual - (Q1 + Q2 + Q3)`.
+      * **Manual Backups:** Implemented a fallback dictionary for years where text extraction was impossible (verified manually).
+      * **Inventory Logic:** Calculated `Inventory Turnover` using a "Forward Fill" strategy to bridge reporting gaps in 2015.
 
-Our model's "foresight" comes from using a set of leading indicators (X) to predict our `Cost_per_Ton` (Y). We've categorized our features into a **Core Model** (for a baseline) and an **Advanced Model** (for improved accuracy).
+### 3\. Feature Engineering
 
-| Category | Variable | Description | Rationale |
-| :--- | :--- | :--- | :--- |
-| **Core** | `Scrap_Price` | Price of iron & steel scrap (PPI) | The primary raw material for EAF. |
-| **Core** | `Electricity_Price` | Industrial electricity price | The primary energy cost for EAF furnaces. |
-| **Core** | `Natural_Gas_Price` | Natural gas price | Key for Nucor's in-house DRI production and a driver of electricity prices. |
-| Advanced | `Diesel_Price` | On-highway diesel price | Proxy for logistics/trucking costs to move scrap and finished goods. |
-| Advanced | `Rail_Price` | Freight rail price (PPI) | Proxy for logistics/rail costs for heavy materials. |
-| Advanced | `Disaster_Event_Count` | Count of major disaster declarations | A "system shock" proxy for events (floods, tornadoes) that disrupt the grid. |
-| Advanced | `Avg_Hourly_Wage` | Avg. hourly wage in manufacturing | A direct measure of the "Direct Labor" component of COGS. |
-| Advanced | `US_Scrap_Exports` | Volume of US scrap exports | Macro-economic feature to model global demand pressure on domestic supply. |
-| Advanced | `US_Dollar_Index` | Trade-weighted US Dollar Index | Models the "currency volatility" risk mentioned in Nucor's annual report. |
-| Advanced | `Graphite_Electrode_Price` | Price index for graphite electrodes | A key (and volatile) *consumable* in EAF furnaces, also cited in reports. |
-| Advanced | `Pig_Iron_Price` | Price of pig iron | The primary "scrap substitute" Nucor buys based on relative pricing. |
-| Advanced | `Econ_Policy_Uncertainty` | Economic Policy Uncertainty Index | A standard academic index to model "political/regulatory conditions" risk. |
+  * **Script:** `src/data/3_process_external_features.py`
+  * **Action:** Aggregates 12 different monthly/daily external datasets into a unified Quarterly index.
+  * **Logic:** Uses `resample('QE').mean()` for prices and `groupby().sum()` for event data (Disasters).
 
-## ⚙️ Data Pipeline & Methodology
+### 4\. The Grand Merge
 
-The primary data engineering task is to time-align our **quarterly** target (Y) with our **monthly** features (X). Our data processing scripts and notebooks handle this entire pipeline:
+  * **Script:** `src/data/4_build_master_dataset.py`
+  * **Action:** Aligns Nucor's fiscal quarter dates (which end on Saturdays) with standard calendar quarters to ensure perfect time-series alignment.
 
-1.  **Load:** Loads the multiple source files (Nucor accounting + external features).
-2.  **Clean:** Cleans number formatting (e.g., "$", ",") and handles messy headers from government (EIA, BLS) files.
-3.  **Resample:** Aggregates the monthly features into quarterly data by calculating the **3-month average** for each quarter.
-4.  **Merge:** Joins the quarterly Nucor data with the newly resampled quarterly features into a single, time-aligned dataset.
-5.  **Output:** Saves the final, model-ready dataset for analysis and modeling.
-
-## 🗂️ Data Sources
-
-* **Accounting & Volume Data (The "Y")**
-    * **SEC EDGAR Database:** All 10-Q (quarterly) and 10-K (annual) reports for Nucor Corp.
-        * Used to extract *Consolidated Cost of Products Sold*.
-        * Used to extract *Total tons shipped to external customers*.
-    * **Virtua Research:** Used for initial data gathering and high-level financials (`nucor.csv`).
-
-* **Feature Data (The "X")**
-    * **U.S. EIA (Energy Information Administration):**
-        * `EIA_Electricity_Price_Monthly.csv`
-        * `EIA_Natural_Gas_Price_Monthly.csv`
-        * `Diesel_Price`
-    * **U.S. BLS (Bureau of Labor Statistics):**
-        * `PPI_Iron_Steel_Scrap_Monthly.csv` (Scrap)
-        * `Rail_Price`
-        * `Average_Hourly_Wage`
-        * `Graphite_Electrode_Price`
-        * `Pig_Iron_Price`
-    * **FEMA (Federal Emergency Management Agency):**
-        * `Disaster_Event_Count`
-    * **U.S. Census Bureau:**
-        * `US_Scrap_Exports`
-    * **FRED (Federal Reserve Economic Data):**
-        * `US_Dollar_Index`
-    * **PolicyUncertainty.com:**
-        * `Economic_Policy_Uncertainty_Index`
+-----
 
 ## 📂 Repository Structure
+
+The project follows the [Cookiecutter Data Science](https://drivendata.github.io/cookiecutter-data-science/) standard:
+
+```text
+├── data/
+│   ├── raw/                   # Original monthly CSVs and extracted Nucor data
+│   ├── interim/               # Intermediate cleaned files (nucor_04_METRICS.csv, external_features,_quarterly.csv)
+│      ├── nucor_financials/   # The nucor's financials (nucor_01_RAW_EXTRACT.csv)
+│   └── processed/             # The Final Master Dataset (model-ready)
+│
+├── notebooks/
+│   └── 01_data_processing.ipynb  # Prototyping & Visualization
+│
+├── src/
+│   ├── data/
+│   │   ├── 1_data_extractor.py       # Scrapes SEC.gov
+│   │   ├── 2_data_processor.py       # Calculates financial metrics
+│   │   ├── 3_process_features.py     # Cleans + aggregate market indices
+│   │   └── 4_build_master.py         # Merges everything
+│   └── models/
+│       └── modelling.py              # (Coming Soon) LSTM/Regression Models
+│
+├── reports/                   # Final Executive Summary & Figures
+└── README.md
+```
+
+-----
+
+## 📊 The Dataset (Features)
+
+Our final `master_dataset.csv` contains **43 rows** and **31 cols** of data (2015-2024) with **0 missing values**.
+
+### Target Variable (Y)
+
+  * **`Y_Cost_Per_Ton`**: The precise production cost per ton of steel sold.
+
+### Predictive Features (X)
+
+| Feature | Source | Hypothesis |
+| :--- | :--- | :--- |
+| **X1: Scrap Price** | BLS (PPI) | \#1 Raw material cost for EAF. |
+| **X2: Electricity** | EIA | Major energy cost for Electric Arc Furnaces. |
+| **X3: Natural Gas** | EIA | Key feedstock for DRI production. |
+| **X4: Diesel Price** | EIA | Proxy for logistics/trucking costs. |
+| **X5: Rail Price** | BLS | Proxy for heavy transport costs. |
+| **X6: Disaster Count** | NOAA | "Shock" events disrupting grid/logistics. |
+| **X7: Labor Wage** | BLS | Direct labor cost component. |
+| **X8: Scrap Exports** | Census | Global demand pressure on US scrap supply. |
+| **X9: USD Index** | FRED | Currency volatility risk (explicitly cited in 10-K). |
+| **X10: Graphite** | BLS | Key consumable (electrodes) for EAF. |
+| **X11: Policy Index** | PolicyUncertainty | Proxy for political/tariff risk. |
+| **X12: Inventory Turnover** | Internal | Inventory efficiency metric. |
+
+-----
+
+## 🚀 How to Run
+
+1.  **Install Dependencies:**
+
+    ```bash
+    pip install pandas requests beautifulsoup4 lxml
+    ```
+
+2.  **Run the Pipeline:**
+
+    ```bash
+    python src/data/1_data_extractor.py    # Downloads & Scrapes 10-Qs
+    python src/data/2_data_processor.py    # Calculates Q4s & Metrics
+    python src/data/3_process_features.py  # Cleans Market Data
+    python src/data/4_build_master.py      # Generates master_dataset.csv
+    ```
+
+3.  **Output:**
+    Find the model-ready file at `data/processed/master_dataset.csv`.
