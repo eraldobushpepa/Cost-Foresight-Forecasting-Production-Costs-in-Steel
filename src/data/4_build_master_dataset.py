@@ -11,13 +11,13 @@ def main():
     print("--- Building Master Dataset ---")
     
     try:
-        # 1. Load Nucor Data
+        # 1. Load Nucor data
         nucor_path = os.path.join(INTERIM_DIR, "nucor_04_METRICS.csv")
         df_nucor = pd.read_csv(nucor_path)
         print(f"Loaded Nucor Data: {df_nucor.shape}")
         
         # --- DATE setup ---
-        # Snap Nucor dates to Standard Calendar Quarter End
+        # Snap Nucor dates to Standard Calendar quarter end
         df_nucor["TempDate"] = pd.to_datetime(df_nucor["PeriodEndDate"])
         
         # Shift back 15 days (April 4 -> March 20) to catch the correct quarter
@@ -26,8 +26,8 @@ def main():
         # Convert to Quarter End
         df_nucor["QuarterEnd"] = df_nucor["TempDate"].dt.to_period("Q").dt.to_timestamp("Q", how="end").dt.normalize()
         
-        # DROP TEMP COLUMN only
-        df_nucor = df_nucor.drop(columns=["TempDate"])
+        # Drop tempdate and quarter
+        df_nucor = df_nucor.drop(columns=["TempDate", "Quarter"])
 
 
         # 2. Load External Features

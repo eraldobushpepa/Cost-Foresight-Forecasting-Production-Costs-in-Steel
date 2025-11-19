@@ -3,6 +3,9 @@ from functools import reduce
 import os
 
 # --- CONFIGURATION ---
+# Correct path relative to src/data/
+RAW_PATH = "data/external"
+
 standard_config = [
     {"file": "PPI_Ferrous_Metal_Scrap.csv", "date": "observation_date", "val": "PCU33123312", "name": "X1_Scrap_Price", "skip": 0},
     {"file": "EIA_Electricity_Price_Monthly.csv", "date": "Month", "val": "industrial cents per kilowatthour", "name": "X2_Electricity_Price", "skip": 4},
@@ -19,10 +22,10 @@ dfs_to_merge = []
 print("--- Processing Standard Monthly Files ---")
 for cfg in standard_config:
     try:
-        df = pd.read_csv(f"data/external/{cfg['file']}", skiprows=cfg["skip"])
+        df = pd.read_csv(f"{RAW_PATH}/{cfg['file']}", skiprows=cfg["skip"])
         df["Date"] = pd.to_datetime(df[cfg["date"]], errors='coerce')
         df = df.dropna(subset=["Date"]).set_index("Date")
-        df_q = df[[cfg["val"]]].resample("QE").mean() # Using 'QE' for Quarter End
+        df_q = df[[cfg["val"]]].resample("QE").mean() # Average for prices
         df_q.columns = [cfg["name"]]
         df_q.index.name = "QuarterEnd"
         dfs_to_merge.append(df_q)
@@ -32,7 +35,7 @@ for cfg in standard_config:
 
 print("--- Processing Daily Data ---")
 try:
-    df_dollar = pd.read_csv("data/external//US_Dollar_Index.csv")
+    df_dollar = pd.read_csv(f"{RAW_PATH}/US_Dollar_Index.csv")
     df_dollar["Date"] = pd.to_datetime(df_dollar["observation_date"], errors='coerce')
     df_dollar = df_dollar.dropna(subset=["Date"]).set_index("Date")
     df_dollar["DTWEXBGS"] = pd.to_numeric(df_dollar["DTWEXBGS"], errors='coerce')
@@ -46,14 +49,17 @@ except Exception as e:
 
 print("--- Processing Event Data ---")
 try:
-    df_noaa = pd.read_csv("data/external/NOAA_disasters_clean.csv")
+    df_noaa = pd.read_csv(f"{RAW_PATH}/NOAA_disasters_clean.csv")
     df_noaa["Date"] = pd.to_datetime(df_noaa["Begin Date"], errors='coerce')
     df_noaa = df_noaa.dropna(subset=["Date"])
     df_noaa["Quarter"] = df_noaa["Date"].dt.to_period("Q")
+    
+    # Sum costs and count events
     df_noaa_q = df_noaa.groupby("Quarter").agg({"CPI-Adjusted Cost": "sum", "Name": "count"})
     df_noaa_q.index = df_noaa_q.index.to_timestamp(freq="Q")
     df_noaa_q.index.name = "QuarterEnd"
     df_noaa_q.columns = ["X6_Disaster_Cost_Sum", "X6_Disaster_Event_Count"]
+    
     dfs_to_merge.append(df_noaa_q)
     print("✅ Processed X6_Disaster_Event_Count")
 except Exception as e:
@@ -61,8 +67,7 @@ except Exception as e:
 
 print("--- Processing Policy Uncertainty (X12) ---")
 try:
-    df_policy = pd.read_csv("data/external/US_Policy_Uncertainty_Data.csv")
-    # FIX: Force numeric to drop footer text
+    df_policy = pd.read_csv(f"{RAW_PATH}/US_Policy_Uncertainty_Data.csv")
     df_policy["Year"] = pd.to_numeric(df_policy["Year"], errors='coerce')
     df_policy = df_policy.dropna(subset=["Year"])
     df_policy["Date"] = pd.to_datetime(dict(year=df_policy.Year, month=df_policy.Month, day=1))
@@ -76,8 +81,17 @@ except Exception as e:
     print(f"❌ Error on Policy Uncertainty: {e}")
 
 print("--- Merging All External Features ---")
+# Merge all dataframes (Outer join preserves all dates)
 df_external = reduce(lambda left, right: pd.merge(left, right, on='QuarterEnd', how='outer'), dfs_to_merge)
 df_external = df_external.sort_index()
+
+# --- FIX: FILL NANs WITH 0 FOR DISASTERS ---
+# If a quarter had no disasters, the merge creates NaNs. We turn these into 0.
+cols_to_zero = ["X6_Disaster_Cost_Sum", "X6_Disaster_Event_Count"]
+for col in cols_to_zero:
+    if col in df_external.columns:
+        df_external[col] = df_external[col].fillna(0)
+        print(f"   -> Filled NaNs with 0 for {col}")
 
 # Save
 output_path = "data/interim/external_features_quarterly.csv"
